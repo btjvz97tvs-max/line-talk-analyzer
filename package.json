@@ -1,0 +1,13 @@
+{
+  "name": "line-talk-analyzer",
+  "version": "1.0.0",
+  "private": true,
+  "description": "LINEのトーク履歴(.txt)をブラウザだけで分析する、単一ファイルのWebアプリ",
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2"
+  }
+}

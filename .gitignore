@@ -1,0 +1,5 @@
+node_modules
+.DS_Store
+# 実際のトーク履歴は絶対にコミットしないこと
+*.txt
+!sample/sample_chat.txt
