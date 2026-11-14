@@ -578,6 +578,34 @@ function unlockAudio() {
   } catch (e) {}
 }
 // 最初のタッチ/クリックで音を使えるようにしておく（スマホは操作の中でしか音を出せないため）
+// 画面の長押し・右クリックでの選択/コピーを止める（入力欄と、共有画面の画像の長押し保存だけは残す）
+(function setupCopyGuard() {
+  try {
+    const st = document.createElement("style");
+    st.textContent =
+      "html,body{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}" +
+      "input,textarea{-webkit-user-select:text;user-select:text}" +
+      "img{-webkit-touch-callout:default}";
+    document.head.appendChild(st);
+    const allowed = (t) => !!(t && t.closest && t.closest("input,textarea,img"));
+    ["copy", "cut", "contextmenu", "selectstart", "dragstart"].forEach((ev) =>
+      document.addEventListener(ev, (e) => { if (!allowed(e.target)) e.preventDefault(); }, true)
+    );
+    // 開発者ツール・ソース表示のショートカットを止める（見えにくくするだけで、完全には防げません）
+    document.addEventListener(
+      "keydown",
+      (e) => {
+        const k = (e.key || "").toLowerCase();
+        const mod = e.ctrlKey || e.metaKey;
+        if (e.key === "F12" || (mod && k === "u") || (mod && e.shiftKey && (k === "i" || k === "j" || k === "c")) || (e.metaKey && e.altKey && (k === "i" || k === "u" || k === "j"))) {
+          e.preventDefault();
+        }
+      },
+      true
+    );
+  } catch (e) {}
+})();
+
 (function setupAudioUnlock() {
   try {
   let done = 0;
