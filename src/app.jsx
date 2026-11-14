@@ -1707,7 +1707,8 @@ function useNavKey() {
 
 function GlassTabs({ items, onSelect, variant }) {
   const activeKey = useNavKey();
-  const [drag, setDrag] = useState(null);
+  const dragRef = useRef(null); // ドラッグ中の位置(%)。Reactの状態にせず、枠はDOMを直接動かす
+  const pillRef = useRef(null);
   const barRef = useRef(null);
   const pressRef = useRef(null);
   const activeRef = useRef(false);
@@ -1732,7 +1733,15 @@ function GlassTabs({ items, onSelect, variant }) {
   };
   const w = 100 / n;
   const activeIdx = items.findIndex((p) => p.key === activeKey);
-  const pillPct = drag !== null ? Math.min(100 - w, Math.max(0, drag - w / 2)) : Math.max(0, activeIdx) * w;
+  const clampPct = (d) => Math.min(100 - w, Math.max(0, d - w / 2));
+  const pillPct = dragRef.current !== null ? clampPct(dragRef.current) : Math.max(0, activeIdx) * w;
+  const movePill = (pct, fast) => {
+    const el = pillRef.current;
+    if (!el) return;
+    el.style.transition = fast ? "transform 0.05s linear, opacity 0.2s ease" : "transform 0.3s cubic-bezier(0.2, 0.9, 0.25, 1), opacity 0.2s ease";
+    el.style.opacity = "1";
+    el.style.transform = `translate3d(${(pct / w) * 100}%, 0, 0)`;
+  };
 
   const pctAt = (x) => {
     const rect = rectRef.current || (barRef.current && barRef.current.getBoundingClientRect());
@@ -1746,7 +1755,8 @@ function GlassTabs({ items, onSelect, variant }) {
     let lastIdx = -1;
     const apply = (x) => {
       const pct = pctAt(x);
-      setDrag(pct);
+      dragRef.current = pct;
+      movePill(clampPct(pct), true);
       const idx = Math.min(n - 1, Math.max(0, Math.floor((pct / 100) * n)));
       if (idx !== lastIdx) {
         lastIdx = idx;
@@ -1769,10 +1779,15 @@ function GlassTabs({ items, onSelect, variant }) {
         setTimeout(() => {
           dragEndedRef.current = false;
         }, 80);
+        // 指を離したところで、止まったページを1回だけ描く
+        if (lastIdx >= 0) {
+          movePill(lastIdx * w, false);
+          onSelect(items[lastIdx].key);
+        }
       }
       activeRef.current = false;
       rectRef.current = null;
-      setDrag(null);
+      dragRef.current = null;
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
       window.removeEventListener("pointercancel", onUp);
@@ -1794,6 +1809,7 @@ function GlassTabs({ items, onSelect, variant }) {
     >
       <div ref={barRef} onPointerDown={onDown} style={{ position: "relative", display: "flex", touchAction: "none", userSelect: "none" }}>
         <div
+          ref={pillRef}
           style={{
             position: "absolute",
             top: 0,
@@ -1801,9 +1817,9 @@ function GlassTabs({ items, onSelect, variant }) {
             left: 0,
             width: `${w}%`,
             transform: `translate3d(${(pillPct / w) * 100}%, 0, 0)`,
-            transition: drag !== null ? "transform 0.06s linear, opacity 0.2s ease" : "transform 0.3s cubic-bezier(0.2, 0.9, 0.25, 1), opacity 0.2s ease",
+            transition: "transform 0.3s cubic-bezier(0.2, 0.9, 0.25, 1), opacity 0.2s ease",
             willChange: "transform",
-            opacity: activeIdx === -1 && drag === null ? 0 : 1,
+            opacity: activeIdx === -1 && dragRef.current === null ? 0 : 1,
             pointerEvents: "none",
           }}
         >
@@ -1884,9 +1900,9 @@ function LineChatApp({ RAW, HOURLY_BY_DAY, names, chatTitle, messages, onReset }
       if (React.startTransition) React.startTransition(() => setPage(key));
       else setPage(key);
     };
-    // タブをスライドして動かしている間は、通り過ぎるページを毎回は描かず、止まったところのページだけ描く
-    if (defer) pageTimerRef.current = setTimeout(commit, 110);
-    else commit();
+    // タブをスライドして動かしている間は、ページを描かない（指を離したときに、止まったページだけ描く）
+    if (defer) return;
+    commit();
   };
   // まだ開いていないページ用の重い集計は、そのページを初めて開くまで計算しない
   const visitedRef = useRef(new Set());
@@ -2460,7 +2476,10 @@ function LineChatApp({ RAW, HOURLY_BY_DAY, names, chatTitle, messages, onReset }
 }
 
 function GlassSegment({ options, value, onChange, small }) {
-  const [drag, setDrag] = useState(null);
+  const dragRef = useRef(null);
+  const pillRef = useRef(null);
+  const pendRef = useRef(null);
+  const pendTimerRef = useRef(null);
   const barRef = useRef(null);
   const pressRef = useRef(null);
   const activeRef = useRef(false);
@@ -2468,7 +2487,14 @@ function GlassSegment({ options, value, onChange, small }) {
   const n = options.length;
   const w = 100 / n;
   const idx = Math.max(0, options.findIndex((o) => o.key === value));
-  const pillPct = drag !== null ? Math.min(100 - w, Math.max(0, drag - w / 2)) : idx * w;
+  const clampPct = (d) => Math.min(100 - w, Math.max(0, d - w / 2));
+  const pillPct = dragRef.current !== null ? clampPct(dragRef.current) : idx * w;
+  const movePill = (pct, fast) => {
+    const el = pillRef.current;
+    if (!el) return;
+    el.style.transition = fast ? "transform 0.05s linear" : "transform 0.3s cubic-bezier(0.2, 0.9, 0.25, 1)";
+    el.style.transform = `translate3d(${(pct / w) * 100}%, 0, 0)`;
+  };
 
   const rectRef = useRef(null);
   const pctAt = (x) => {
@@ -2483,11 +2509,18 @@ function GlassSegment({ options, value, onChange, small }) {
     let last = value;
     const apply = (x) => {
       const pct = pctAt(x);
-      setDrag(pct);
+      dragRef.current = pct;
+      movePill(clampPct(pct), true);
       const k = options[Math.min(n - 1, Math.max(0, Math.floor((pct / 100) * n)))].key;
       if (k !== last) {
         last = k;
-        onChange(k);
+        // 動かしている間は重い再描画を待ち、少し止まったときか指を離したときに1回だけ反映する
+        pendRef.current = k;
+        clearTimeout(pendTimerRef.current);
+        pendTimerRef.current = setTimeout(() => {
+          if (pendRef.current !== null) onChange(pendRef.current);
+          pendRef.current = null;
+        }, 140);
       }
     };
     pressRef.current = setTimeout(() => {
@@ -2507,9 +2540,15 @@ function GlassSegment({ options, value, onChange, small }) {
           dragEndedRef.current = false;
         }, 80);
       }
+      if (activeRef.current) {
+        clearTimeout(pendTimerRef.current);
+        movePill(Math.max(0, options.findIndex((o) => o.key === last)) * w, false);
+        if (pendRef.current !== null) onChange(pendRef.current);
+        pendRef.current = null;
+      }
       activeRef.current = false;
       rectRef.current = null;
-      setDrag(null);
+      dragRef.current = null;
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
       window.removeEventListener("pointercancel", onUp);
@@ -2531,6 +2570,7 @@ function GlassSegment({ options, value, onChange, small }) {
     >
       <div ref={barRef} onPointerDown={onDown} style={{ position: "relative", display: "flex", touchAction: "none", userSelect: "none" }}>
         <div
+          ref={pillRef}
           style={{
             position: "absolute",
             top: 0,
@@ -2538,7 +2578,7 @@ function GlassSegment({ options, value, onChange, small }) {
             left: 0,
             width: `${w}%`,
             transform: `translate3d(${(pillPct / w) * 100}%, 0, 0)`,
-            transition: drag !== null ? "transform 0.06s linear" : "transform 0.3s cubic-bezier(0.2, 0.9, 0.25, 1)",
+            transition: "transform 0.3s cubic-bezier(0.2, 0.9, 0.25, 1)",
             willChange: "transform",
             pointerEvents: "none",
           }}
