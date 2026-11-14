@@ -1,6 +1,6 @@
 
 try {
-const { useState, useMemo, useRef, useEffect } = React;
+const { useState, useMemo, useRef, useEffect, useLayoutEffect } = React;
 // グラフ部品(Recharts)は大きいので、ページを開いた直後は待たずに画面を出し、読み込めたらここで部品を取り出す
 let AreaChart, Area, BarChart, Bar, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine, CartesianGrid;
 function bindRecharts() {
@@ -3736,6 +3736,55 @@ function buildStorySlides({ names, chatTitle, RAW_D, messages, totalAll, longest
   return slides;
 }
 
+// 大きな数字や見出しを、画面の幅に合わせて自動で縮めて収める（長い数字が折り返して崩れないように）
+function FitBig({ base, allowWrap, sample, children, style, className }) {
+  const outerRef = useRef(null);
+  const sampleRef = useRef(null);
+  const [fit, setFit] = useState({ size: base, wrap: false });
+  useLayoutEffect(() => {
+    let dead = false;
+    const run = () => {
+      const o = outerRef.current;
+      const sm = sampleRef.current;
+      if (dead || !o || !sm) return;
+      const avail = o.clientWidth;
+      const w = sm.offsetWidth; // base の大きさで1行に並べたときの幅
+      if (!avail || !w) return;
+      let next;
+      if (w <= avail) next = { size: base, wrap: false };
+      else {
+        const target = Math.floor(base * (avail / w) * 0.98);
+        const floor = allowWrap ? Math.round(base * 0.6) : 20;
+        if (target >= floor) next = { size: target, wrap: false };
+        else next = { size: floor, wrap: !!allowWrap };
+      }
+      setFit((f) => (f.size === next.size && f.wrap === next.wrap ? f : next));
+    };
+    run();
+    // フォントの読み込み完了や画面サイズの変化で幅が変わるので測り直す
+    try {
+      if (document.fonts && document.fonts.ready) document.fonts.ready.then(run);
+    } catch (e) {}
+    window.addEventListener("resize", run);
+    return () => {
+      dead = true;
+      window.removeEventListener("resize", run);
+    };
+  }, [base, allowWrap, sample]);
+  return (
+    <div ref={outerRef} className={className} style={{ ...style, fontSize: fit.size, whiteSpace: fit.wrap ? "normal" : "nowrap", wordBreak: fit.wrap ? "break-word" : "normal" }}>
+      <span
+        ref={sampleRef}
+        aria-hidden="true"
+        style={{ position: "absolute", right: "100%", top: 0, visibility: "hidden", whiteSpace: "nowrap", pointerEvents: "none", fontSize: base, fontWeight: 800, fontVariantNumeric: "tabular-nums" }}
+      >
+        {sample}
+      </span>
+      {children}
+    </div>
+  );
+}
+
 function CountUp({ to }) {
   const [v, setV] = useState(0);
   useEffect(() => {
@@ -3900,19 +3949,31 @@ function StoryPlayer({ slides, onClose }) {
 
         {(slide.kind === "text" || slide.kind === "finale") && (
           <>
-            <div
+            <FitBig
               className="lta-up"
-              style={{ animationDelay: "0.3s", fontSize: bigSize, fontWeight: 800, marginTop: 10, lineHeight: 1.2, wordBreak: "break-word", fontVariantNumeric: "tabular-nums", textShadow: "0 4px 18px rgba(0,0,0,0.25)" }}
+              base={bigSize}
+              allowWrap={slide.count === undefined}
+              sample={
+                slide.count !== undefined ? (
+                  <>
+                    {Number(slide.count).toLocaleString()}
+                    <span style={{ fontSize: "0.4em", marginLeft: "0.05em" }}>{slide.suffix}</span>
+                  </>
+                ) : (
+                  bigText
+                )
+              }
+              style={{ position: "relative", animationDelay: "0.3s", fontWeight: 800, marginTop: 10, lineHeight: 1.2, fontVariantNumeric: "tabular-nums", textShadow: "0 4px 18px rgba(0,0,0,0.25)" }}
             >
               {slide.count !== undefined ? (
                 <>
                   <CountUp to={slide.count} />
-                  <span style={{ fontSize: 30, marginLeft: 4 }}>{slide.suffix}</span>
+                  <span style={{ fontSize: "0.4em", marginLeft: "0.05em" }}>{slide.suffix}</span>
                 </>
               ) : (
                 bigText
               )}
-            </div>
+            </FitBig>
             {slide.sub && (
               <div className="lta-up" style={{ animationDelay: "0.55s", fontSize: 15, opacity: 0.92, marginTop: 14, lineHeight: 1.6 }}>
                 {slide.sub}
