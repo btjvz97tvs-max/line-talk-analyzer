@@ -1738,7 +1738,8 @@ function GlassTabs({ items, onSelect, variant }) {
   const movePill = (pct, fast) => {
     const el = pillRef.current;
     if (!el) return;
-    el.style.transition = fast ? "transform 0.05s linear, opacity 0.2s ease" : "transform 0.3s cubic-bezier(0.2, 0.9, 0.25, 1), opacity 0.2s ease";
+    // なぞっている間・指を離したときは吸い込みアニメーションなしで、その場で動かす
+    el.style.transition = fast ? "none" : "transform 0.16s ease-out, opacity 0.2s ease";
     el.style.opacity = "1";
     el.style.transform = `translate3d(${(pct / w) * 100}%, 0, 0)`;
   };
@@ -1781,8 +1782,10 @@ function GlassTabs({ items, onSelect, variant }) {
         }, 80);
         // 指を離したところで、止まったページを1回だけ描く
         if (lastIdx >= 0) {
-          movePill(lastIdx * w, false);
-          onSelect(items[lastIdx].key);
+          movePill(lastIdx * w, true);
+          const key = items[lastIdx].key;
+          // 枠の位置を先に画面へ出してから、ページを描く
+          requestAnimationFrame(() => requestAnimationFrame(() => onSelect(key)));
         }
       }
       activeRef.current = false;
@@ -1817,7 +1820,7 @@ function GlassTabs({ items, onSelect, variant }) {
             left: 0,
             width: `${w}%`,
             transform: `translate3d(${(pillPct / w) * 100}%, 0, 0)`,
-            transition: "transform 0.3s cubic-bezier(0.2, 0.9, 0.25, 1), opacity 0.2s ease",
+            transition: "transform 0.16s ease-out, opacity 0.2s ease",
             willChange: "transform",
             opacity: activeIdx === -1 && dragRef.current === null ? 0 : 1,
             pointerEvents: "none",
@@ -1841,6 +1844,7 @@ function GlassTabs({ items, onSelect, variant }) {
             <button
               key={p.key}
               onClick={() => {
+                if (pillRef.current) pillRef.current.style.transition = "transform 0.16s ease-out, opacity 0.2s ease";
                 onSelect(p.key);
                 if (!dragEndedRef.current) {
                   playTick(extra ? 690 : 760, 0.05);
@@ -2492,7 +2496,7 @@ function GlassSegment({ options, value, onChange, small }) {
   const movePill = (pct, fast) => {
     const el = pillRef.current;
     if (!el) return;
-    el.style.transition = fast ? "transform 0.05s linear" : "transform 0.3s cubic-bezier(0.2, 0.9, 0.25, 1)";
+    el.style.transition = fast ? "none" : "transform 0.16s ease-out";
     el.style.transform = `translate3d(${(pct / w) * 100}%, 0, 0)`;
   };
 
@@ -2542,9 +2546,10 @@ function GlassSegment({ options, value, onChange, small }) {
       }
       if (activeRef.current) {
         clearTimeout(pendTimerRef.current);
-        movePill(Math.max(0, options.findIndex((o) => o.key === last)) * w, false);
-        if (pendRef.current !== null) onChange(pendRef.current);
+        movePill(Math.max(0, options.findIndex((o) => o.key === last)) * w, true);
+        const k = pendRef.current;
         pendRef.current = null;
+        if (k !== null) requestAnimationFrame(() => requestAnimationFrame(() => onChange(k)));
       }
       activeRef.current = false;
       rectRef.current = null;
@@ -2578,7 +2583,7 @@ function GlassSegment({ options, value, onChange, small }) {
             left: 0,
             width: `${w}%`,
             transform: `translate3d(${(pillPct / w) * 100}%, 0, 0)`,
-            transition: "transform 0.3s cubic-bezier(0.2, 0.9, 0.25, 1)",
+            transition: "transform 0.16s ease-out",
             willChange: "transform",
             pointerEvents: "none",
           }}
@@ -2598,6 +2603,7 @@ function GlassSegment({ options, value, onChange, small }) {
           <button
             key={o.key}
             onClick={() => {
+              if (pillRef.current) pillRef.current.style.transition = "transform 0.16s ease-out";
               onChange(o.key);
               if (!dragEndedRef.current) {
                 playTick(659.25, 0.05); // ミ(E5)
