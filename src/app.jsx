@@ -1687,6 +1687,21 @@ function GlassTabs({ items, onSelect, variant }) {
   const dragEndedRef = useRef(false);
   const extra = variant === "extra";
   const n = items.length;
+  // バーの幅を測って、長い名前（「カレンダー」など）は光る枠に収まる大きさまで文字を小さくする
+  const [barW, setBarW] = useState(0);
+  useLayoutEffect(() => {
+    const el = barRef.current;
+    if (!el) return;
+    const measure = () => setBarW((v) => (v === el.clientWidth ? v : el.clientWidth));
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, []);
+  const labelSize = (label) => {
+    if (!extra || !barW) return 10;
+    const fit = Math.floor(((barW / n - 7) / Array.from(label).length) * 10) / 10;
+    return Math.max(6.5, Math.min(10, fit));
+  };
   const w = 100 / n;
   const activeIdx = items.findIndex((p) => p.key === activeKey);
   const pillPct = drag !== null ? Math.min(100 - w, Math.max(0, drag - w / 2)) : Math.max(0, activeIdx) * w;
@@ -1767,7 +1782,7 @@ function GlassTabs({ items, onSelect, variant }) {
           <div
             style={{
               position: "absolute",
-              inset: 2,
+              inset: extra ? 1 : 2,
               borderRadius: 12,
               background: "linear-gradient(180deg, rgba(255,255,255,0.20) 0%, rgba(255,255,255,0.07) 100%)",
               border: "1px solid rgba(255,255,255,0.18)",
@@ -1812,7 +1827,7 @@ function GlassTabs({ items, onSelect, variant }) {
               }}
             >
               <Icon2 size={14} />
-              {p.label}
+              {extra ? <span style={{ fontSize: labelSize(p.label), lineHeight: "14px", height: 14 }}>{p.label}</span> : p.label}
             </button>
           );
         })}
